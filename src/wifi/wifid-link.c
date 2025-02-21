@@ -135,22 +135,23 @@ void link_free(struct link *l)
 	free(l->friendly_name);
 	free(l->ifname);
 	free(l->config_methods);
+	free(l->ip_binary);
 	free(l);
 }
 
 void link_use_dev(struct link *l)
 {
-    l->use_dev = true;
+	l->use_dev = true;
 }
 
 bool link_is_using_dev(struct link *l)
 {
-    return l->use_dev;
+	return l->use_dev;
 }
 
 int link_set_config_methods(struct link *l, char *config_methods)
 {
-   char *cm;
+	char *cm;
 
 	if (!config_methods)
 		return log_EINVAL();
@@ -160,8 +161,24 @@ int link_set_config_methods(struct link *l, char *config_methods)
 		return log_ENOMEM();
 
 	free(l->config_methods);
-	l->config_methods = config_methods;
-   return 0;
+	l->config_methods = cm;
+	return 0;
+}
+
+int link_set_ip_binary(struct link *l, const char *ip_binary)
+{
+	char *ipb;
+
+	if (!ip_binary)
+		return log_EINVAL();
+
+	ipb = strdup(ip_binary);
+	if (!ipb)
+		return log_ENOMEM();
+
+	free(l->ip_binary);
+	l->ip_binary = ipb;
+	return 0;
 }
 
 bool link_get_managed(struct link *l)
@@ -226,9 +243,6 @@ int link_set_friendly_name(struct link *l, const char *name)
 
 	if (!l || !name || !*name)
 		return log_EINVAL();
-
-	if (!l->managed)
-		return log_EUNMANAGED();
 
 	t = strdup(name);
 	if (!t)

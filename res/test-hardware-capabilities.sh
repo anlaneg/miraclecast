@@ -12,7 +12,7 @@ then
    set -v
 fi
 
-. miracle-utils.sh
+. ./miracle-utils.sh
 
 WIFI_COUNT=0
 WIFI_NAMES="$(find_wireless_network_interfaces)"
@@ -28,7 +28,7 @@ then
 elif [ 1 = $WIFI_COUNT ]
 then
    WIFI_NAME="$WIFI_NAMES"
-elif [ 2 -ge $WIFI_COUNT ]
+elif [ 2 -le $WIFI_COUNT ]
 then
    echo Choose wireless device:
    PS3="device: "

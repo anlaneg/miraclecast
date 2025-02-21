@@ -40,11 +40,16 @@
 #include "wifid.h"
 #include "config.h"
 
+#define XSTR(x) STR(x)
+#define STR(x) #x
 const char *interface_name = NULL;
 const char *config_methods = NULL;
 unsigned int arg_wpa_loglevel = LOG_NOTICE;
+bool arg_wpa_syslog = false;
 bool use_dev = false;
 bool lazy_managed = false;
+const char *arg_ip_binary = NULL;
+
 
 /*
  * Manager Handling
@@ -103,13 +108,15 @@ static void manager_add_udev_link(struct manager *m,
 	if (r < 0)
 		return;
 
-   if (m->friendly_name && l->managed)
-	   link_set_friendly_name(l, m->friendly_name);
-   if (m->config_methods)
-	   link_set_config_methods(l, m->config_methods);
+	if (m->friendly_name && l->managed)
+		link_set_friendly_name(l, m->friendly_name);
+	if (m->config_methods)
+		link_set_config_methods(l, m->config_methods);
 
 	if(use_dev)
-        link_use_dev(l);
+		link_use_dev(l);
+	if(arg_ip_binary)
+		link_set_ip_binary(l, arg_ip_binary);
 
 #ifdef RELY_UDEV
 	bool managed = udev_device_has_tag(d, "miracle") && !lazy_managed;
@@ -475,13 +482,16 @@ static int help(void)
 	       "     --version             Show package version\n"
 	       "     --log-level <lvl>     Maximum level for log messages\n"
 	       "     --log-time            Prefix log-messages with timestamp\n"
+	       "     --log-date-time       Prefix log-messages with date time\n"
 	       "\n"
 	       "  -i --interface           Choose the interface to use\n"
 	       "     --config-methods      Define config methods for pairing, default 'pbc'\n"
 	       "\n"
-	       "     --wpa-loglevel <lvl   wpa_supplicant log-level\n"
+	       "     --wpa-loglevel <lvl>  wpa_supplicant log-level\n"
+	       "     --wpa-syslog          wpa_supplicant use syslog\n"
 	       "     --use-dev             enable workaround for 'no ifname' issue\n"
 	       "     --lazy-managed        manage interface only when user decide to do\n"
+	       "     --ip-binary <path>    path to 'ip' binary [default: "XSTR(IP_BINARY)"]\n"
 	       , program_invocation_short_name);
 	/*
 	 * 80-char barrier:
@@ -497,22 +507,28 @@ static int parse_argv(int argc, char *argv[])
 		ARG_VERSION = 0x100,
 		ARG_LOG_LEVEL,
 		ARG_LOG_TIME,
+		ARG_LOG_DATE_TIME,
 		ARG_WPA_LOGLEVEL,
+		ARG_WPA_SYSLOG,
 		ARG_USE_DEV,
 		ARG_CONFIG_METHODS,
 		ARG_LAZY_MANAGED,
+		ARG_IP_BINARY,
 	};
 	static const struct option options[] = {
-		{ "help",	no_argument,		NULL,	'h' },
-		{ "version",	no_argument,		NULL,	ARG_VERSION },
-		{ "log-level",	required_argument,	NULL,	ARG_LOG_LEVEL },
-		{ "log-time",	no_argument,		NULL,	ARG_LOG_TIME },
+		{ "help",       	no_argument,		NULL,	'h' },
+		{ "version",	        no_argument,		NULL,	ARG_VERSION },
+		{ "log-level",	        required_argument,	NULL,	ARG_LOG_LEVEL },
+		{ "log-time",	        no_argument,		NULL,	ARG_LOG_TIME },
+		{ "log-date-time",	no_argument,		NULL,	ARG_LOG_DATE_TIME },
 
 		{ "wpa-loglevel",	required_argument,	NULL,	ARG_WPA_LOGLEVEL },
+		{ "wpa-syslog",	no_argument,	NULL,	ARG_WPA_SYSLOG },
 		{ "interface",	required_argument,	NULL,	'i' },
 		{ "use-dev",	no_argument,	NULL,	ARG_USE_DEV },
 		{ "config-methods",	required_argument,	NULL,	ARG_CONFIG_METHODS },
 		{ "lazy-managed",	no_argument,	NULL,	ARG_LAZY_MANAGED },
+		{ "ip-binary",	required_argument,	NULL,	ARG_IP_BINARY },
 		{}
 	};
 	int c;
@@ -533,17 +549,26 @@ static int parse_argv(int argc, char *argv[])
 		case ARG_LOG_TIME:
 			log_init_time();
 			break;
+		case ARG_LOG_DATE_TIME:
+			log_date_time = true;
+			break;
 		case ARG_USE_DEV:
 			use_dev = true;
 			break;
 		case ARG_CONFIG_METHODS:
 			config_methods = optarg;
+			break;
 		case ARG_LAZY_MANAGED:
 			lazy_managed = true;
 			break;
-
 		case ARG_WPA_LOGLEVEL:
 			arg_wpa_loglevel = log_parse_arg(optarg);
+			break;
+		case ARG_WPA_SYSLOG:
+			arg_wpa_syslog = true;
+			break;
+		case ARG_IP_BINARY:
+			arg_ip_binary = optarg;
 			break;
 		case '?':
 			return -EINVAL;

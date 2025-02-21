@@ -34,10 +34,35 @@
 #include "util.h"
 #include "config.h"
 
+#include <readline/readline.h>
+
+#define HISTORY_FILENAME ".miracle-wifi.history"
+
+#define CLI_PROMPT "\001" CLI_BLUE "\002" "[wifictl] # " "\001" CLI_DEFAULT "\002"
+
 static sd_bus *bus;
 static struct ctl_wifi *wifi;
 
 static struct ctl_link *selected_link;
+
+char* get_cli_prompt()
+{
+        return CLI_PROMPT;
+}
+
+/*
+ * get history filename
+ */
+
+char* get_history_filename()
+{
+    return HISTORY_FILENAME;
+}
+
+struct ctl_wifi *get_wifi()
+{
+    return wifi;
+}
 
 /*
  * cmd list
@@ -52,27 +77,27 @@ static int cmd_list(char **args, unsigned int n)
 
 	/* list links */
 
-	cli_printf("%6s %-24s %-30s %-10s\n",
+	cli_command_printf("%6s %-24s %-30s %-10s\n",
 		   "LINK", "INTERFACE", "FRIENDLY-NAME", "MANAGED");
 
 	shl_dlist_for_each(i, &wifi->links) {
 		l = link_from_dlist(i);
 		++link_cnt;
 
-		cli_printf("%6s %-24s %-30s %-10s\n",
-			   l->label,
-			   shl_isempty(l->ifname) ?
-			       "<unknown>" : l->ifname,
-			   shl_isempty(l->friendly_name) ?
-			       "<unknown>" : l->friendly_name,
-			   l->managed ? "yes": "no");
+		cli_command_printf("%6s %-24s %-30s %-10s\n",
+				   l->label,
+				   shl_isempty(l->ifname) ?
+				       "<unknown>" : l->ifname,
+				   shl_isempty(l->friendly_name) ?
+				       "<unknown>" : l->friendly_name,
+				   l->managed ? "yes": "no");
 	}
 
-	cli_printf("\n");
+	cli_command_printf("\n");
 
 	/* list peers */
 
-	cli_printf("%6s %-24s %-30s %-10s\n",
+	cli_command_printf("%6s %-24s %-30s %-10s\n",
 		   "LINK", "PEER-ID", "FRIENDLY-NAME", "CONNECTED");
 
 	shl_dlist_for_each(i, &wifi->links) {
@@ -82,16 +107,16 @@ static int cmd_list(char **args, unsigned int n)
 			p = peer_from_dlist(j);
 			++peer_cnt;
 
-			cli_printf("%6s %-24s %-30s %-10s\n",
-				   p->l->label,
-				   p->label,
-				   shl_isempty(p->friendly_name) ?
-				       "<unknown>" : p->friendly_name,
-				   p->connected ? "yes" : "no");
+			cli_command_printf("%6s %-24s %-30s %-10s\n",
+					   p->l->label,
+					   p->label,
+					   shl_isempty(p->friendly_name) ?
+					       "<unknown>" : p->friendly_name,
+					   p->connected ? "yes" : "no");
 		}
 	}
 
-	cli_printf("\n %u peers and %u links listed.\n", peer_cnt, link_cnt);
+	cli_command_printf("\n %u peers and %u links listed.\n", peer_cnt, link_cnt);
 
 	return 0;
 }
@@ -121,6 +146,7 @@ static int cmd_select(char **args, unsigned int n)
 	}
 
 	selected_link = l;
+	ctl_link_set_wfd_subelements(l, "000600111c4400c8");
 	cli_printf("link %s selected\n", selected_link->label);
 
 	return 0;
@@ -148,34 +174,34 @@ static int cmd_show(char **args, unsigned int n)
 	}
 
 	if (l) {
-		cli_printf("Link=%s\n", l->label);
+		cli_command_printf("Link=%s\n", l->label);
 		if (l->ifindex > 0)
-			cli_printf("InterfaceIndex=%u\n", l->ifindex);
+			cli_command_printf("InterfaceIndex=%u\n", l->ifindex);
 		if (l->ifname && *l->ifname)
-			cli_printf("InterfaceName=%s\n", l->ifname);
+			cli_command_printf("InterfaceName=%s\n", l->ifname);
 		if (l->friendly_name && *l->friendly_name)
-			cli_printf("FriendlyName=%s\n", l->friendly_name);
-		cli_printf("P2PScanning=%d\n", l->p2p_scanning);
+			cli_command_printf("FriendlyName=%s\n", l->friendly_name);
+		cli_command_printf("P2PScanning=%d\n", l->p2p_scanning);
 		if (l->wfd_subelements && *l->wfd_subelements)
-			cli_printf("WfdSubelements=%s\n", l->wfd_subelements);
-		cli_printf("Managed=%d\n", l->managed);
+			cli_command_printf("WfdSubelements=%s\n", l->wfd_subelements);
+		cli_command_printf("Managed=%d\n", l->managed);
 	} else if (p) {
-		cli_printf("Peer=%s\n", p->label);
+		cli_command_printf("Peer=%s\n", p->label);
 		if (p->p2p_mac && *p->p2p_mac)
-			cli_printf("P2PMac=%s\n", p->p2p_mac);
+			cli_command_printf("P2PMac=%s\n", p->p2p_mac);
 		if (p->friendly_name && *p->friendly_name)
-			cli_printf("FriendlyName=%s\n", p->friendly_name);
-		cli_printf("Connected=%d\n", p->connected);
+			cli_command_printf("FriendlyName=%s\n", p->friendly_name);
+		cli_command_printf("Connected=%d\n", p->connected);
 		if (p->interface && *p->interface)
-			cli_printf("Interface=%s\n", p->interface);
+			cli_command_printf("Interface=%s\n", p->interface);
 		if (p->local_address && *p->local_address)
-			cli_printf("LocalAddress=%s\n", p->local_address);
+			cli_command_printf("LocalAddress=%s\n", p->local_address);
 		if (p->remote_address && *p->remote_address)
-			cli_printf("RemoteAddress=%s\n", p->remote_address);
+			cli_command_printf("RemoteAddress=%s\n", p->remote_address);
 		if (p->wfd_subelements && *p->wfd_subelements)
-			cli_printf("WfdSubelements=%s\n", p->wfd_subelements);
+			cli_command_printf("WfdSubelements=%s\n", p->wfd_subelements);
 	} else {
-		cli_printf("Show what?\n");
+		cli_command_printf("Show what?\n");
 		return 0;
 	}
 
@@ -192,7 +218,7 @@ static int cmd_set_friendly_name(char **args, unsigned int n)
 	const char *name;
 
 	if (n < 1) {
-		cli_printf("To what?\n");
+		cli_command_printf("To what?\n");
 		return 0;
 	}
 
@@ -214,11 +240,6 @@ static int cmd_set_friendly_name(char **args, unsigned int n)
 		return 0;
 	}
 
-	if (!l->managed) {
-		cli_printf("link %s not managed\n", l->label);
-		return 0;
-	}
-
 	return ctl_link_set_friendly_name(l, name);
 }
 
@@ -233,7 +254,7 @@ static int cmd_set_managed(char **args, unsigned int n)
 	bool managed = true;
 
 	if (n < 1) {
-		cli_printf("To what?\n");
+		cli_command_printf("To what?\n");
 		return 0;
 	}
 
@@ -315,7 +336,7 @@ static int cmd_connect(char **args, unsigned int n)
 	const char *prov, *pin;
 
 	if (n < 1) {
-		cli_printf("To whom?\n");
+		cli_command_printf("To whom?\n");
 		return 0;
 	}
 
@@ -358,7 +379,7 @@ static int cmd_disconnect(char **args, unsigned int n)
 	struct ctl_peer *p;
 
 	if (n < 1) {
-		cli_printf("From whom?\n");
+		cli_command_printf("From whom?\n");
 		return 0;
 	}
 
@@ -391,17 +412,17 @@ static int cmd_quit(char **args, unsigned int n)
  */
 
 static const struct cli_cmd cli_cmds[] = {
-	{ "list",		NULL,					CLI_M,	CLI_LESS,	0,	cmd_list,		"List all objects" },
-	{ "select",		"[link]",				CLI_Y,	CLI_LESS,	1,	cmd_select,		"Select default link" },
-	{ "show",		"[link|peer]",				CLI_M,	CLI_LESS,	1,	cmd_show,		"Show detailed object information" },
-	{ "set-friendly-name",	"[link] <name>",			CLI_M,	CLI_LESS,	2,	cmd_set_friendly_name,	"Set friendly name of an object" },
+	{ "list",		NULL,					CLI_M,	CLI_LESS,	0,	cmd_list,		"List all objects", {NULL}},
+	{ "select",		"[link]",				CLI_Y,	CLI_LESS,	1,	cmd_select,		"Select default link", {links_generator, NULL} },
+	{ "show",		"[link|peer]",				CLI_M,	CLI_LESS,	1,	cmd_show,		"Show detailed object information", {links_peers_generator, NULL} },
+	{ "set-friendly-name",	"[link] <name>",			CLI_M,	CLI_LESS,	2,	cmd_set_friendly_name,	"Set friendly name of an object", {links_generator, yes_no_generator} },
 	{ "set-managed",	"[link] <yes|no>",	CLI_M,	CLI_LESS,	2,	cmd_set_managed,	"Manage or unmnage a link" },
-	{ "p2p-scan",		"[link] [stop]",			CLI_Y,	CLI_LESS,	2,	cmd_p2p_scan,		"Control neighborhood P2P scanning" },
-	{ "connect",		"<peer> [provision] [pin]",		CLI_M,	CLI_LESS,	3,	cmd_connect,		"Connect to peer" },
-	{ "disconnect",		"<peer>",				CLI_M,	CLI_EQUAL,	1,	cmd_disconnect,		"Disconnect from peer" },
-	{ "quit",		NULL,					CLI_Y,	CLI_MORE,	0,	cmd_quit,		"Quit program" },
-	{ "exit",		NULL,					CLI_Y,	CLI_MORE,	0,	cmd_quit,		NULL },
-	{ "help",		NULL,					CLI_M,	CLI_MORE,	0,	NULL,			"Print help" },
+	{ "p2p-scan",		"[link] [stop]",			CLI_Y,	CLI_LESS,	2,	cmd_p2p_scan,		"Control neighborhood P2P scanning", {links_generator, NULL} },
+	{ "connect",		"<peer> [provision] [pin]",		CLI_M,	CLI_LESS,	3,	cmd_connect,		"Connect to peer", {peers_generator, NULL} },
+	{ "disconnect",		"<peer>",				CLI_M,	CLI_EQUAL,	1,	cmd_disconnect,		"Disconnect from peer", {peers_generator, NULL} },
+	{ "quit",		NULL,					CLI_Y,	CLI_MORE,	0,	cmd_quit,		"Quit program", {NULL} },
+	{ "exit",		NULL,					CLI_Y,	CLI_MORE,	0,	cmd_quit,		NULL , {NULL}},
+	{ "help",		NULL,					CLI_M,	CLI_MORE,	0,	NULL,			"Print help" , {NULL} },
 	{ },
 };
 
@@ -483,9 +504,11 @@ void cli_fn_help()
 	       "Send control command to or query the MiracleCast Wifi-Manager. If no arguments\n"
 	       "are given, an interactive command-line tool is provided.\n\n"
 	       "  -h --help                      Show this help\n"
-	       "     --help-commands             Show avaliable commands\n"
+	       "     --help-commands             Show available commands\n"
 	       "     --version                   Show package version\n"
 	       "     --log-level <lvl>           Maximum level for log messages\n"
+	       "     --log-time                  Prefix log-messages with timestamp\n"
+	       "     --log-date-time             Prefix log-messages with date time\n"
 	       "     --log-journal-level <lvl>   Maximum level for journal log messages\n"
 	       "\n"
 	       "Commands:\n"
@@ -562,14 +585,18 @@ static int parse_argv(int argc, char *argv[])
 	enum {
 		ARG_VERSION = 0x100,
 		ARG_LOG_LEVEL,
+		ARG_LOG_TIME,
+		ARG_LOG_DATE_TIME,
 		ARG_JOURNAL_LEVEL,
       ARG_HELP_COMMANDS,
 	};
 	static const struct option options[] = {
-		{ "help",	no_argument,		NULL,	'h' },
+		{ "help",		no_argument,		NULL,	'h' },
 		{ "help-commands",	no_argument,		NULL,	ARG_HELP_COMMANDS },
-		{ "version",	no_argument,		NULL,	ARG_VERSION },
-		{ "log-level",	required_argument,	NULL,	ARG_LOG_LEVEL },
+		{ "version",		no_argument,		NULL,	ARG_VERSION },
+		{ "log-level",		required_argument,	NULL,	ARG_LOG_LEVEL },
+		{ "log-time",		no_argument,		NULL,	ARG_LOG_TIME },
+		{ "log-date-time",	no_argument,		NULL,	ARG_LOG_DATE_TIME },
 		{ "log-journal-level",	required_argument,	NULL,	ARG_JOURNAL_LEVEL },
 		{}
 	};
@@ -587,6 +614,12 @@ static int parse_argv(int argc, char *argv[])
 			return 0;
 		case ARG_LOG_LEVEL:
 			cli_max_sev = log_parse_arg(optarg);
+			break;
+		case ARG_LOG_TIME:
+			log_init_time();
+			break;
+		case ARG_LOG_DATE_TIME:
+			log_date_time = true;
 			break;
 		case ARG_JOURNAL_LEVEL:
 			log_max_sev = log_parse_arg(optarg);

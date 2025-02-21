@@ -19,6 +19,8 @@
 
 #define LOG_SUBSYSTEM "supplicant"
 
+#include "config.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <stdbool.h>
@@ -27,7 +29,11 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <systemd/sd-event.h>
+
+#ifdef ENABLE_SYSTEMD
 #include <systemd/sd-journal.h>
+#endif
+
 #include <unistd.h>
 #include "shl_dlist.h"
 #include "shl_log.h"
@@ -35,7 +41,6 @@
 #include "util.h"
 #include "wifid.h"
 #include "wpas.h"
-#include "config.h"
 
 struct supplicant_group {
 	unsigned long users;
@@ -374,6 +379,7 @@ static int supplicant_group_spawn_dhcp_server(struct supplicant_group *g,
 		sigemptyset(&mask);
 		sigprocmask(SIG_SETMASK, &mask, NULL);
 
+#ifdef ENABLE_SYSTEMD
 		/* redirect stdout/stderr to journal */
 		sprintf(journal_id, "miracle-dhcp-%s", g->ifname);
 		fd_journal = sd_journal_stream_fd(journal_id, LOG_INFO, false);
@@ -382,9 +388,12 @@ static int supplicant_group_spawn_dhcp_server(struct supplicant_group *g,
 			dup2(fd_journal, 1);
 			dup2(fd_journal, 2);
 		} else {
+#endif
 			/* no journal? redirect stdout to parent's stderr */
 			dup2(2, 1);
+#ifdef ENABLE_SYSTEMD
 		}
+#endif
 
 		i = 0;
 		argv[i++] = (char*) "miracle-dhcp";
@@ -397,6 +406,10 @@ static int supplicant_group_spawn_dhcp_server(struct supplicant_group *g,
 		argv[i++] = g->ifname;
 		argv[i++] = "--comm-fd";
 		argv[i++] = commfd;
+		if (g->s->l->ip_binary) {
+			argv[i++] = "--ip-binary";
+			argv[i++] = g->s->l->ip_binary;
+		}
 		argv[i] = NULL;
 
 		if (execvpe(argv[0], argv, environ)< 0) {
@@ -438,6 +451,7 @@ static int supplicant_group_spawn_dhcp_client(struct supplicant_group *g)
 		sigemptyset(&mask);
 		sigprocmask(SIG_SETMASK, &mask, NULL);
 
+#ifdef ENABLE_SYSTEMD
 		/* redirect stdout/stderr to journal */
 		sprintf(journal_id, "miracle-dhcp-%s", g->ifname);
 		fd_journal = sd_journal_stream_fd(journal_id, LOG_INFO, false);
@@ -446,9 +460,12 @@ static int supplicant_group_spawn_dhcp_client(struct supplicant_group *g)
 			dup2(fd_journal, 1);
 			dup2(fd_journal, 2);
 		} else {
+#endif
 			/* no journal? redirect stdout to parent's stderr */
 			dup2(2, 1);
+#ifdef ENABLE_SYSTEMD
 		}
+#endif
 
 		i = 0;
 		argv[i++] = (char*) "miracle-dhcp";
@@ -458,6 +475,10 @@ static int supplicant_group_spawn_dhcp_client(struct supplicant_group *g)
 		argv[i++] = g->ifname;
 		argv[i++] = "--comm-fd";
 		argv[i++] = commfd;
+		if (g->s->l->ip_binary) {
+			argv[i++] = "--ip-binary";
+			argv[i++] = g->s->l->ip_binary;
+		}
 		argv[i] = NULL;
 
 		if (execvpe(argv[0], argv, environ) < 0) {
@@ -876,7 +897,7 @@ static void supplicant_parse_peer(struct supplicant *s,
 		/* TODO: wfd_dev_info only contains the dev-info sub-elem,
 		 * while wfd_sublemens contains all. Fix that! The user has no
 		 * chance to distinguish both.
-		 * We currently use it only as boolen (set/unset) but once we
+		 * We currently use it only as boolean (set/unset) but once we
 		 * parse it we _definitely_ have to provide proper data. */
 		r = wpas_message_dict_read(m, "wfd_dev_info", 's', &val);
 		if (r >= 0) {
@@ -1451,7 +1472,6 @@ static void supplicant_event(struct supplicant *s, struct wpas_message *m)
 		    !strcmp(name, "WPS-AP-AVAILABLE-PIN") ||
 		    !strcmp(name, "CTRL-EVENT-EAP-STATUS") ||
 		    !strcmp(name, "CTRL-EVENT-EAP-METHOD") ||
-		    !strcmp(name, "CTRL-EVENT-EAP-STATUS") ||
 		    !strcmp(name, "WPS-CRED-RECEIVED") ||
 		    !strcmp(name, "WPS-AP-AVAILABLE") ||
 		    !strcmp(name, "WPS-REG-SUCCESS") ||
@@ -2212,7 +2232,7 @@ static int supplicant_global_attach_fn(struct wpas *w,
 	 * Devices with P2P_DEVICE support (instead of direct P2P_GO/CLIENT
 	 * support) are broken with a *lot* of wpa_supplicant versions on the
 	 * global interface. Therefore, try to open the p2p-dev-* interface
-	 * after the global-ATTACH succeded (which means the iface is properly
+	 * after the global-ATTACH succeeded (which means the iface is properly
 	 * set up). If this works, use the p2p-dev-* interface, otherwise, just
 	 * copy the global interface over to bus_dev.
 	 * Event-forwarding is broken on the global-interface in such cases,
@@ -2380,6 +2400,7 @@ static void supplicant_run(struct supplicant *s, const char *binary)
 	sigemptyset(&mask);
 	sigprocmask(SIG_SETMASK, &mask, NULL);
 
+#ifdef ENABLE_SYSTEMD
 	/* redirect stdout/stderr to journal */
 	sprintf(journal_id, "miracle-wifid-%s-%u",
 		s->l->ifname, s->l->ifindex);
@@ -2389,9 +2410,12 @@ static void supplicant_run(struct supplicant *s, const char *binary)
 		dup2(fd_journal, 1);
 		dup2(fd_journal, 2);
 	} else {
+#endif
 		/* no journal? redirect stdout to parent's stderr */
 		dup2(2, 1);
+#ifdef ENABLE_SYSTEMD
 	}
+#endif
 
 	/* initialize wpa_supplicant args */
 	i = 0;
@@ -2415,6 +2439,11 @@ static void supplicant_run(struct supplicant *s, const char *binary)
 	argv[i++] = s->l->ifname;
 	argv[i++] = "-g";
 	argv[i++] = s->global_ctrl;
+
+	if (arg_wpa_syslog) {
+		argv[i++] = "-s";
+	}
+
 	argv[i] = NULL;
 
 	/* execute wpa_supplicant; if it fails, the caller issues exit(1) */
@@ -2478,7 +2507,11 @@ static int supplicant_spawn(struct supplicant *s)
 	log_debug("spawn supplicant of %s", s->l->ifname);
 
     if (supplicant_find(&binary) < 0) {
-        log_error("execution of wpas (%s) not possible: %m", binary);
+        if (binary != NULL) {
+            log_error("execution of wpas (%s) not possible: %m", binary);
+	} else {
+            log_error("execution of wpas not possible: %m");
+	}
         return -EINVAL;
     }
 

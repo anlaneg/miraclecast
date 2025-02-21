@@ -2,9 +2,8 @@ find_package(PkgConfig)
 pkg_check_modules (GLIB2 REQUIRED glib-2.0)
 link_directories( ${GLIB2_LIBRARY_DIRS})
 include_directories( ${GLIB2_INCLUDE_DIRS})
-find_package(Readline)
+find_package(Readline REQUIRED)
 pkg_check_modules (GLIB2 REQUIRED glib-2.0)
-########### next target ###############
 
 set(miracle-wifictl_SRCS ctl.h 
                          ctl-cli.c 
@@ -24,8 +23,8 @@ if(READLINE_FOUND)
 endif(READLINE_FOUND)
 
 target_link_libraries(miracle-wifictl miracle-shared)
+target_link_libraries(miracle-wifictl m)
 target_link_libraries(miracle-wifictl ${GLIB2_LIBRARIES})
-########### next target ###############
 
 set(miracle-sinkctl_SRCS ctl.h 
                          ctl-cli.c 
@@ -37,6 +36,7 @@ set(miracle-sinkctl_SRCS ctl.h
 
 add_executable(miracle-sinkctl ${miracle-sinkctl_SRCS})
 target_link_libraries(miracle-sinkctl ${GLIB2_LIBRARIES})
+target_link_libraries(miracle-sinkctl m)
 
 install(TARGETS miracle-sinkctl DESTINATION bin)
 
@@ -51,42 +51,3 @@ endif(READLINE_FOUND)
 target_link_libraries(miracle-sinkctl miracle-shared)
 
 INCLUDE_DIRECTORIES(${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/shared)
-
-########### install files ###############
-
-
-
-
-#original Makefile.am contents follow:
-
-#include $(top_srcdir)/common.am
-#bin_PROGRAMS = miracle-wifictl miracle-sinkctl
-#
-#miracle_wifictl_SOURCES = \
-#	ctl.h \
-#	ctl-cli.c \
-#	ctl-wifi.c \
-#	wifictl.c
-#miracle_wifictl_CPPFLAGS = \
-#	$(AM_CPPFLAGS) \
-#	$(DEPS_CFLAGS)
-#miracle_wifictl_LDADD = \
-#	../shared/libmiracle-shared.la \
-#	-lreadline \
-#	$(DEPS_LIBS)
-#
-#miracle_sinkctl_SOURCES = \
-#	ctl.h \
-#	ctl-cli.c \
-#	ctl-sink.c \
-#	ctl-wifi.c \
-#	sinkctl.c
-#miracle_sinkctl_CPPFLAGS = \
-#	$(AM_CPPFLAGS) \
-#	$(DEPS_CFLAGS)
-#miracle_sinkctl_LDADD = \
-#	../shared/libmiracle-shared.la \
-#	-lreadline \
-#	$(DEPS_LIBS)
-#
-#

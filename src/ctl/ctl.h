@@ -17,6 +17,9 @@
  * along with MiracleCast; If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef CTL_CTL_H
+#define CTL_CTL_H
+
 #include <errno.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -29,12 +32,21 @@
 #include "shl_dlist.h"
 #include "shl_log.h"
 
-#ifndef CTL_CTL_H
-#define CTL_CTL_H
+/* *sigh* readline doesn't include all their deps, so put them last */
+#include <readline/history.h>
+#include <readline/readline.h>
+#include <readline/rltypedefs.h>
 
 struct ctl_wifi;
 struct ctl_link;
 struct ctl_peer;
+
+char*   get_history_filename  ();
+struct  ctl_wifi * get_wifi   ();
+char *  links_peers_generator (const char *text, int state);
+char *  links_generator       (const char *text, int state);
+char *  peers_generator       (const char *text, int state);
+char *  yes_no_generator      (const char *text, int state);
 
 /* wifi handling */
 
@@ -123,8 +135,10 @@ bool ctl_sink_is_closed(struct ctl_sink *s);
 /* CLI handling */
 
 extern unsigned int cli_max_sev;
-void cli_printv(const char *fmt, va_list args);
+void cli_printv(const char *fmt, bool prefix_time, va_list args);
+void cli_printf_time_prefix();
 void cli_printf(const char *fmt, ...);
+void cli_command_printf(const char *fmt, ...);
 
 #define cli_log(_fmt, ...) \
 	cli_printf(_fmt "\n", ##__VA_ARGS__)
@@ -189,8 +203,6 @@ void cli_printf(const char *fmt, ...);
 #define CLI_BOLDGRAY		"\x1B[1;30m"
 #define CLI_BOLDWHITE		"\x1B[1;37m"
 
-#define CLI_PROMPT		CLI_BLUE "[miraclectl] # " CLI_DEFAULT
-
 struct cli_cmd {
 	const char *cmd;
 	const char *args;
@@ -207,6 +219,7 @@ struct cli_cmd {
 	int argc;
 	int (*fn) (char **args, unsigned int n);
 	const char *desc;
+	rl_compentry_func_t *completion_fns[2];
 };
 
 extern sd_event *cli_event;
@@ -216,6 +229,7 @@ extern unsigned int wfd_supported_res_cea;
 extern unsigned int wfd_supported_res_vesa;
 extern unsigned int wfd_supported_res_hh;
 
+char* get_cli_prompt();
 int cli_init(sd_bus *bus, const struct cli_cmd *cmds);
 void cli_destroy(void);
 int cli_run(void);

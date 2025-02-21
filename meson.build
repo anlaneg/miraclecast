@@ -19,7 +19,7 @@ configure_file(output: 'config.h',
 )
 
 c_compiler = meson.get_compiler('c')
-readline = c_compiler.find_library('readline', required: false)
+readline = c_compiler.find_library('readline', required: true)
 if readline.found()
   add_project_arguments('-DHAVE_READLINE', language: 'c')
 endif
@@ -32,9 +32,19 @@ if get_option('rely-udev')
   add_project_arguments('-DRELY_UDEV', language: 'c')
 endif
 
+if get_option('enable-systemd')
+  add_project_arguments('-DENABLE_SYSTEMD', language: 'c')
+  libsystemd = dependency('libsystemd')
+else
+  libsystemd = dependency('libelogind')
+endif
+
+add_project_arguments('-DIP_BINARY='+get_option('ip-binary'), language: 'c')
+
 glib2 = dependency('glib-2.0')
 udev = dependency('libudev')
-libsystemd = dependency('libsystemd')
+
+m = c_compiler.find_library('m', required: false)
 
 subdir('src')
 subdir('res')

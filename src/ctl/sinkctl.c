@@ -17,6 +17,8 @@
  * along with MiracleCast; If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "config.h"
+
 #include <errno.h>
 #include <getopt.h>
 #include <locale.h>
@@ -30,7 +32,11 @@
 #include <sys/time.h>
 #include <systemd/sd-bus.h>
 #include <systemd/sd-event.h>
+
+#ifdef ENABLE_SYSTEMD
 #include <systemd/sd-journal.h>
+#endif
+
 #include <time.h>
 #include <unistd.h>
 #include "ctl.h"
@@ -40,6 +46,12 @@
 #include "shl_util.h"
 #include "util.h"
 #include "config.h"
+
+#include <readline/readline.h>
+
+#define HISTORY_FILENAME ".miracle-sink.history"
+
+#define CLI_PROMPT "\001" CLI_BLUE "\002" "[sinkctl] # " "\001" CLI_DEFAULT "\002"
 
 static sd_bus *bus;
 static struct ctl_wifi *wifi;
@@ -59,17 +71,37 @@ void launch_player(struct ctl_sink *s);
 
 char *gst_scale_res;
 int gst_audio_en = 1;
-static const int DEFAULT_RSTP_PORT = 1991;
+static const int DEFAULT_RSTP_PORT = 7236;
 bool uibc_option;
 bool uibc_enabled;
 bool external_player;
 int rstp_port;
 int uibc_port;
 char* player;
+GHashTable* protocol_extensions;
 
 unsigned int wfd_supported_res_cea  = 0x0001ffff;
 unsigned int wfd_supported_res_vesa = 0x1fffffff;
 unsigned int wfd_supported_res_hh   = 0x00001fff;
+
+struct ctl_wifi *get_wifi()
+{
+        return wifi;
+}
+
+char* get_cli_prompt()
+{
+        return CLI_PROMPT;
+}
+
+/*
+ * get history filename
+ */
+
+char* get_history_filename()
+{
+  return HISTORY_FILENAME;
+}
 
 /*
  * cmd list
@@ -84,28 +116,28 @@ static int cmd_list(char **args, unsigned int n)
 
 	/* list links */
 
-	cli_printf("%6s %-24s %-30s %-10s\n",
-		   "LINK", "INTERFACE", "FRIENDLY-NAME", "MANAGED");
+	cli_command_printf("%6s %-24s %-30s %-10s\n",
+			   "LINK", "INTERFACE", "FRIENDLY-NAME", "MANAGED");
 
 	shl_dlist_for_each(i, &wifi->links) {
 		l = link_from_dlist(i);
 		++link_cnt;
 
-		cli_printf("%6s %-24s %-30s %-10s\n",
-			   l->label,
-			   shl_isempty(l->ifname) ?
-			       "<unknown>" : l->ifname,
+		cli_command_printf("%6s %-24s %-30s %-10s\n",
+				   l->label,
+				   shl_isempty(l->ifname) ?
+				       "<unknown>" : l->ifname,
 			   shl_isempty(l->friendly_name) ?
 			       "<unknown>" : l->friendly_name,
 			   l->managed ? "yes": "no");
 	}
 
-	cli_printf("\n");
+	cli_command_printf("\n");
 
 	/* list peers */
 
-	cli_printf("%6s %-24s %-30s %-10s\n",
-		   "LINK", "PEER-ID", "FRIENDLY-NAME", "CONNECTED");
+	cli_command_printf("%6s %-24s %-30s %-10s\n",
+			   "LINK", "PEER-ID", "FRIENDLY-NAME", "CONNECTED");
 
 	shl_dlist_for_each(i, &wifi->links) {
 		l = link_from_dlist(i);
@@ -114,16 +146,16 @@ static int cmd_list(char **args, unsigned int n)
 			p = peer_from_dlist(j);
 			++peer_cnt;
 
-			cli_printf("%6s %-24s %-30s %-10s\n",
-				   p->l->label,
-				   p->label,
-				   shl_isempty(p->friendly_name) ?
+			cli_command_printf("%6s %-24s %-30s %-10s\n",
+					   p->l->label,
+					   p->label,
+					   shl_isempty(p->friendly_name) ?
 				       "<unknown>" : p->friendly_name,
 				   p->connected ? "yes" : "no");
 		}
 	}
 
-	cli_printf("\n %u peers and %u links listed.\n", peer_cnt, link_cnt);
+	cli_command_printf("\n %u peers and %u links listed.\n", peer_cnt, link_cnt);
 
 	return 0;
 }
@@ -142,44 +174,79 @@ static int cmd_show(char **args, unsigned int n)
 		    !(p = ctl_wifi_find_peer(wifi, args[0])) &&
 		    !(l = ctl_wifi_search_link(wifi, args[0])) &&
 		    !(p = ctl_wifi_search_peer(wifi, args[0]))) {
-			cli_error("unknown link or peer %s", args[0]);
+			cli_error("unknown %s", args[0]);
 			return 0;
 		}
 	}
 
 	if (l) {
-		cli_printf("Link=%s\n", l->label);
+		cli_command_printf("Link=%s\n", l->label);
 		if (l->ifindex > 0)
-			cli_printf("InterfaceIndex=%u\n", l->ifindex);
+			cli_command_printf("InterfaceIndex=%u\n", l->ifindex);
 		if (l->ifname && *l->ifname)
-			cli_printf("InterfaceName=%s\n", l->ifname);
+			cli_command_printf("InterfaceName=%s\n", l->ifname);
 		if (l->friendly_name && *l->friendly_name)
-			cli_printf("FriendlyName=%s\n", l->friendly_name);
-		cli_printf("P2PScanning=%d\n", l->p2p_scanning);
+			cli_command_printf("FriendlyName=%s\n", l->friendly_name);
+		cli_command_printf("P2PScanning=%d\n", l->p2p_scanning);
 		if (l->wfd_subelements && *l->wfd_subelements)
-			cli_printf("WfdSubelements=%s\n", l->wfd_subelements);
-		cli_printf("Managed=%d\n", l->managed);
+			cli_command_printf("WfdSubelements=%s\n", l->wfd_subelements);
+		cli_command_printf("Managed=%d\n", l->managed);
 	} else if (p) {
-		cli_printf("Peer=%s\n", p->label);
+		cli_command_printf("Peer=%s\n", p->label);
 		if (p->p2p_mac && *p->p2p_mac)
-			cli_printf("P2PMac=%s\n", p->p2p_mac);
+			cli_command_printf("P2PMac=%s\n", p->p2p_mac);
 		if (p->friendly_name && *p->friendly_name)
-			cli_printf("FriendlyName=%s\n", p->friendly_name);
-		cli_printf("Connected=%d\n", p->connected);
+			cli_command_printf("FriendlyName=%s\n", p->friendly_name);
+		cli_command_printf("Connected=%d\n", p->connected);
 		if (p->interface && *p->interface)
-			cli_printf("Interface=%s\n", p->interface);
+			cli_command_printf("Interface=%s\n", p->interface);
 		if (p->local_address && *p->local_address)
-			cli_printf("LocalAddress=%s\n", p->local_address);
+			cli_command_printf("LocalAddress=%s\n", p->local_address);
 		if (p->remote_address && *p->remote_address)
-			cli_printf("RemoteAddress=%s\n", p->remote_address);
+			cli_command_printf("RemoteAddress=%s\n", p->remote_address);
 		if (p->wfd_subelements && *p->wfd_subelements)
-			cli_printf("WfdSubelements=%s\n", p->wfd_subelements);
+			cli_command_printf("WfdSubelements=%s\n", p->wfd_subelements);
 	} else {
-		cli_printf("Show what?\n");
+		cli_command_printf("Show what?\n");
 		return 0;
 	}
 
 	return 0;
+}
+
+/*
+ * cmd: set-friendly-name
+ */
+
+static int cmd_set_friendly_name(char **args, unsigned int n)
+{
+	struct ctl_link *l = NULL;
+	const char *name;
+
+	if (n < 1) {
+		cli_command_printf("To what?\n");
+		return 0;
+	}
+
+	if (n > 1) {
+		l = ctl_wifi_search_link(wifi, args[0]);
+		if (!l) {
+			cli_error("unknown link %s", args[0]);
+			return 0;
+		}
+
+		name = args[1];
+	} else {
+		name = args[0];
+	}
+
+	l = l ? : running_link;
+	if (!l) {
+		cli_error("no running link");
+		return 0;
+	}
+
+	return ctl_link_set_friendly_name(l, name);
 }
 
 /*
@@ -370,14 +437,15 @@ static int sink_timeout_fn(sd_event_source *s, uint64_t usec, void *data)
 }
 
 static const struct cli_cmd cli_cmds[] = {
-	{ "list",		NULL,					CLI_M,	CLI_LESS,	0,	cmd_list,		"List all objects" },
-	{ "show",		"<link|peer>",				CLI_M,	CLI_LESS,	1,	cmd_show,		"Show detailed object information" },
-	{ "run",		"<link>",				CLI_M,	CLI_EQUAL,	1,	cmd_run,		"Run sink on given link" },
-	{ "bind",		"<link>",				CLI_M,	CLI_EQUAL,	1,	cmd_bind,		"Like 'run' but bind the link name to run when it is hotplugged" },
-	{ "set-managed",	"<link> <yes|no>",	CLI_M,	CLI_EQUAL,	2,	cmd_set_managed,	"Manage or unmnage a link" },
-	{ "quit",		NULL,					CLI_Y,	CLI_MORE,	0,	cmd_quit,		"Quit program" },
-	{ "exit",		NULL,					CLI_Y,	CLI_MORE,	0,	cmd_quit,		NULL },
-	{ "help",		NULL,					CLI_M,	CLI_MORE,	0,	NULL,			"Print help" },
+	{ "list",		NULL,			CLI_M,	CLI_LESS,	0,	cmd_list,		"List all objects", {NULL} },
+	{ "show",		"<link|peer>",		CLI_M,	CLI_LESS,	1,	cmd_show,		"Show detailed object information", {links_peers_generator, NULL} },
+	{ "run",		"<link>",		CLI_M,	CLI_EQUAL,	1,	cmd_run,		"Run sink on given link", {links_generator, NULL} },
+	{ "bind",		"<link>",		CLI_M,	CLI_EQUAL,	1,	cmd_bind,		"Like 'run' but bind the link name to run when it is hotplugged", {links_generator, NULL} },
+	{ "set-friendly-name",	"[link] <name>",	CLI_M,	CLI_LESS,	2,	cmd_set_friendly_name,	"Set friendly name of an object", {links_generator, NULL} },
+	{ "set-managed",	"<link> <yes|no>",	CLI_M,	CLI_EQUAL,	2,	cmd_set_managed,	"Manage or unmnage a link", {links_generator, yes_no_generator} },
+	{ "quit",		NULL,			CLI_Y,	CLI_MORE,	0,	cmd_quit,		"Quit program", {NULL} },
+	{ "exit",		NULL,			CLI_Y,	CLI_MORE,	0,	cmd_quit,		NULL, {NULL} },
+	{ "help",		NULL,			CLI_M,	CLI_MORE,	0,	NULL,			"Print help", {NULL} },
 	{ },
 };
 
@@ -399,6 +467,7 @@ static void spawn_gst(struct ctl_sink *s)
 		sigemptyset(&mask);
 		sigprocmask(SIG_SETMASK, &mask, NULL);
 
+#ifdef ENABLE_SYSTEMD
 		/* redirect stdout/stderr to journal */
 		fd_journal = sd_journal_stream_fd("miracle-sinkctl-gst",
 						  LOG_DEBUG,
@@ -408,9 +477,12 @@ static void spawn_gst(struct ctl_sink *s)
 			dup2(fd_journal, 1);
 			dup2(fd_journal, 2);
 		} else {
+#endif
 			/* no journal? redirect stdout to parent's stderr */
 			dup2(2, 1);
+#ifdef ENABLE_SYSTEMD
 		}
+#endif
 
 		launch_player(s);
 		_exit(1);
@@ -712,9 +784,12 @@ void cli_fn_help()
 	printf("%s [OPTIONS...] ...\n\n"
 	       "Control a dedicated local sink via MiracleCast.\n"
 	       "  -h --help                      Show this help\n"
-	       "     --help-commands             Show avaliable commands\n"
+	       "     --help-commands             Show available commands\n"
 	       "     --version                   Show package version\n"
 	       "     --log-level <lvl>           Maximum level for log messages\n"
+	       "     --log-time                  Prefix log-messages with timestamp\n"
+	       "     --log-date-time             Prefix log-messages with date time\n"
+	       "\n"
 	       "     --log-journal-level <lvl>   Maximum level for journal log messages\n"
 	       "     --gst-debug [cat:]lvl[,...] List of categories an level of debug\n"
 	       "     --audio <0/1>               Enable audio support (default %d)\n"
@@ -726,7 +801,7 @@ void cli_fn_help()
 	       "                                    default CEA  %08X\n"
 	       "                                    default VESA %08X\n"
 	       "                                    default HH   %08X\n"
-	       "     --help-res                  Shows avaliable values for res\n"
+	       "     --help-res                  Shows available values for res\n"
 	       "\n"
 	       , program_invocation_short_name, gst_audio_en, DEFAULT_RSTP_PORT,
 		   wfd_supported_res_cea, wfd_supported_res_vesa, wfd_supported_res_hh
@@ -748,6 +823,7 @@ static int ctl_interactive(char **argv, int argc)
 	r = ctl_sink_new(&sink, cli_event);
 	if (r < 0)
 		goto error;
+        sink->protocol_extensions = protocol_extensions;
 
 	r = ctl_wifi_fetch(wifi);
 	if (r < 0)
@@ -803,6 +879,8 @@ static int parse_argv(int argc, char *argv[])
 	enum {
 		ARG_VERSION = 0x100,
 		ARG_LOG_LEVEL,
+		ARG_LOG_TIME,
+		ARG_LOG_DATE_TIME,
 		ARG_JOURNAL_LEVEL,
 		ARG_GST_DEBUG,
 		ARG_AUDIO,
@@ -813,10 +891,12 @@ static int parse_argv(int argc, char *argv[])
       ARG_HELP_COMMANDS,
 	};
 	static const struct option options[] = {
-		{ "help",	no_argument,		NULL,	'h' },
+		{ "help",		no_argument,		NULL,	'h' },
 		{ "help-commands",	no_argument,		NULL,	ARG_HELP_COMMANDS },
-		{ "version",	no_argument,		NULL,	ARG_VERSION },
-		{ "log-level",	required_argument,	NULL,	ARG_LOG_LEVEL },
+		{ "version"	,	no_argument,		NULL,	ARG_VERSION },
+		{ "log-level",		required_argument,	NULL,	ARG_LOG_LEVEL },
+		{ "log-time",	        no_argument,		NULL,	ARG_LOG_TIME },
+		{ "log-date-time",	no_argument,		NULL,	ARG_LOG_DATE_TIME },
 		{ "log-journal-level",	required_argument,	NULL,	ARG_JOURNAL_LEVEL },
 		{ "gst-debug",	required_argument,	NULL,	ARG_GST_DEBUG },
 		{ "audio",	required_argument,	NULL,	ARG_AUDIO },
@@ -850,6 +930,12 @@ static int parse_argv(int argc, char *argv[])
 			return 0;
 		case ARG_LOG_LEVEL:
 			cli_max_sev = log_parse_arg(optarg);
+			break;
+		case ARG_LOG_TIME:
+			log_init_time();
+			break;
+		case ARG_LOG_DATE_TIME:
+			log_date_time = true;
 			break;
 		case ARG_GST_DEBUG:
 			gst_debug = optarg;
@@ -920,7 +1006,7 @@ int main(int argc, char **argv)
       }
       gchar* autocmd;
       autocmd = g_key_file_get_string (gkf, "sinkctl", "autocmd", NULL);
-      if (autocmd && argc == 1) {
+      if (autocmd) {
          gchar** autocmds = g_strsplit(autocmd, " ", -1);
          autocmds_free = autocmds;
          while (*autocmds) {
@@ -939,6 +1025,22 @@ int main(int argc, char **argv)
             autocmds++;
          }
          g_free(autocmd);
+      }
+      gchar** sinkctl_keys;
+      gsize len = 0;
+      protocol_extensions = g_hash_table_new(g_str_hash, g_str_equal);
+
+      sinkctl_keys = g_key_file_get_keys (gkf,
+                                          "sinkctl",
+                                          &len,
+                                          NULL);
+      for (int i = 0; i < (int)len; i++) {
+          if (g_str_has_prefix(sinkctl_keys[i], "extends.")) {
+              gchar* orig_key = sinkctl_keys[i];
+              gchar* key = orig_key+8;
+              gchar* value = g_key_file_get_string (gkf, "sinkctl", orig_key, NULL);
+              g_hash_table_insert(protocol_extensions, key, value);
+          }
       }
       g_key_file_free(gkf);
    }

@@ -35,7 +35,7 @@
  * of Wifi-P2P support in common network managers. Once they gain proper
  * support, we will drop this helper!
  *
- * The "ip" invokation is quite fragile and ugly. However, performing these
+ * The "ip" invocation is quite fragile and ugly. However, performing these
  * steps directly involves netlink operations and more. As no-one came up with
  * patches, yet, we keep the hack. To anyone trying to fix it: Please, spend
  * this time hacking on NetworkManager, connman and friends instead! If they
@@ -67,8 +67,11 @@
 #include "shl_log.h"
 #include "config.h"
 
+#define XSTR(x) STR(x)
+#define STR(x) #x
+
 static const char *arg_netdev;
-static const char *arg_ip_binary = "/bin/ip";
+static const char *arg_ip_binary = XSTR(IP_BINARY);
 static bool arg_server;
 static char arg_local[INET_ADDRSTRLEN];
 static char arg_gateway[INET_ADDRSTRLEN];
@@ -747,9 +750,10 @@ static int help(void)
 	       "     --version              Show package version\n"
 	       "     --log-level <lvl>      Maximum level for log messages\n"
 	       "     --log-time             Prefix log-messages with timestamp\n"
+	       "     --log-date-time        Prefix log-messages with date time\n"
 	       "\n"
 	       "     --netdev <dev>         Network device to run on\n"
-	       "     --ip-binary <path>     Path to 'ip' binary [default: /bin/ip]\n"
+	       "     --ip-binary <path>     Path to 'ip' binary [default: "XSTR(IP_BINARY)"]\n"
 	       "     --comm-fd <int>        Comm-socket FD passed through execve()\n"
 	       "\n"
 	       "Server Options:\n"
@@ -772,6 +776,7 @@ static int parse_argv(int argc, char *argv[])
 		ARG_VERSION = 0x100,
 		ARG_LOG_LEVEL,
 		ARG_LOG_TIME,
+		ARG_LOG_DATE_TIME,
 
 		ARG_NETDEV,
 		ARG_IP_BINARY,
@@ -787,10 +792,11 @@ static int parse_argv(int argc, char *argv[])
 		ARG_TO,
 	};
 	static const struct option options[] = {
-		{ "help",	no_argument,		NULL,	'h' },
-		{ "version",	no_argument,		NULL,	ARG_VERSION },
-		{ "log-level",	required_argument,	NULL,	ARG_LOG_LEVEL },
-		{ "log-time",	no_argument,		NULL,	ARG_LOG_TIME },
+		{ "help",		no_argument,		NULL,	'h' },
+		{ "version",		no_argument,		NULL,	ARG_VERSION },
+		{ "log-level",		required_argument,	NULL,	ARG_LOG_LEVEL },
+		{ "log-time",		no_argument,		NULL,	ARG_LOG_TIME },
+		{ "log-date-time",	no_argument,		NULL,	ARG_LOG_DATE_TIME },
 
 		{ "netdev",	required_argument,	NULL,	ARG_NETDEV },
 		{ "ip-binary",	required_argument,	NULL,	ARG_IP_BINARY },
@@ -822,6 +828,9 @@ static int parse_argv(int argc, char *argv[])
 			break;
 		case ARG_LOG_TIME:
 			log_init_time();
+			break;
+		case ARG_LOG_DATE_TIME:
+			log_date_time = true;
 			break;
 		case ARG_NETDEV:
 			arg_netdev = optarg;

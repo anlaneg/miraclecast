@@ -1,15 +1,15 @@
 # MiracleCast - Wifi-Display/Miracast Implementation
 
 [![Join the chat at https://gitter.im/albfan/miraclecast](https://badges.gitter.im/albfan/miraclecast.svg)](https://gitter.im/albfan/miraclecast?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
-[![Build Status](https://semaphoreci.com/api/v1/albfan/miraclecast-2/branches/master/badge.svg)](https://semaphoreci.com/albfan/miraclecast-2)
+[![Semaphore CI Build Status](https://albfan.semaphoreci.com/badges/miraclecast/branches/master.svg?style=shields)](https://albfan.semaphoreci.com/projects/miraclecast)
+[![Travis CI Build Status](https://travis-ci.org/albfan/miraclecast.svg?branch=master)](https://travis-ci.org/albfan/miraclecast)
 [![Coverage Status](https://coveralls.io/repos/github/albfan/miraclecast/badge.svg?branch=master)](https://coveralls.io/github/albfan/miraclecast?branch=master)
 
 The MiracleCast project provides software to connect external monitors to your system via Wi-Fi. It is compatible to the Wifi-Display specification also known as Miracast. MiracleCast implements the Display-Source as well as Display-Sink side.
 
-The Display-Source side allows you to connect external displays to your system and stream local content to the device. A lot of effort is put into making this as easy as connecting external displays via HDMI.
+The Display-Source side allows you to connect external displays to your system and stream local content to the device. A lot of effort is put into making this as easy as connecting external displays via HDMI. *Note: This is not implemented yet. Please see [#4](../../issues/4).*
 
 On the other hand, the Display-Sink side allows you to create wifi-capable external displays yourself. You can use it on your embedded devices or even on full desktops to allow other systems to use your device as external display.
-
 
 ## Requirements
 
@@ -21,12 +21,14 @@ The MiracleCast projects requires the following software to be installed:
  - **glib**: A utility library. Used by the current DHCP implementation. Will be removed once sd-dns gains DHCP-server capabilities.
     *required*: ~=glib2-2.38 (might work with older releases, untested..)
 
- - **check**: Test-suite for C programs. Used for optional tests of the MiracleCast code base.
-    *optional*: ~=check-0.9.11 (might work with older releases, untested..)
-
  - **gstreamer**: MiracleCast rely on gstreamer to show cast its output. You can test if all needed is installed launching [res/test-viewer.sh](https://github.com/albfan/miraclecast/blob/master/res/test-viewer.sh)
 
+ - **wpa_supplicant**: MiracleCast spawns wpa_supplicant with a custom config.
+
  - **P2P Wi-Fi device** Although widespread these days, there are some devices not compatible with [Wi-Fi Direct](http://en.wikipedia.org/wiki/Wi-Fi_Direct) (prior know as Wi-Fi P2P). Test yours with [res/test-hardware-capabilities.sh](https://github.com/albfan/miraclecast/blob/master/res/test-hardware-capabilities.sh)
+
+ - **check**: Test-suite for C programs. Used for optional tests of the MiracleCast code base.
+    *optional*: ~=check-0.9.11 (might work with older releases, untested..)
 
  - copy the dbus policy **res/org.freedesktop.miracle.conf** to `/etc/dbus-1/system.d/`
 
@@ -68,7 +70,7 @@ See there was interface changes on systemd 219, if you are below that version, u
 
 ### Arch linux
 
-Use existing [AUR package](https://aur.archlinux.org/packages/miraclecast-git/). Remember to enable kdus to systemd-git dependency if you are below 221 systemd.
+Use existing [AUR package](https://aur.archlinux.org/packages/miraclecast-git/). Remember to enable kdbus to systemd-git dependency if you are below 221 systemd.
 
     $ export _systemd_git_kdbus=--enable-kdbus
 

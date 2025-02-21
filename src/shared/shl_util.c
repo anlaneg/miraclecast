@@ -31,7 +31,7 @@
  * variants to allow these.
  * Base-prefix parsing is only done if base=0 is requested. Otherwise,
  * base-prefixes are forbidden.
- * The input string must be ASCII compatbile (which includes UTF8).
+ * The input string must be ASCII compatible (which includes UTF8).
  *
  * We also always check for overflows and return errors (but continue parsing!)
  * so callers can catch it correctly.
@@ -826,8 +826,9 @@ int shl__mkdir_parents(const char *prefix, const char *path, mode_t mode)
 	if (!e || e == path)
 		return 0;
 
-	p = strndupa(path, e - path);
+	p = strndup(path, e - path);
 	r = shl__is_dir(p);
+	free((char*)p);
 	if (r > 0)
 		return 0;
 	if (r == 0)

@@ -41,12 +41,39 @@ AC_ARG_ENABLE([rely-udev],
               AS_HELP_STRING([--enable-rely-udev], [Use tagged device with miraclecast]), AC_DEFINE([RELY_UDEV], [], [Rely on udev to find miraclecast device]))
 AC_ARG_ENABLE([log-debug],
                   AS_HELP_STRING([--disable-log-debug], [Disable log debug]), , AC_DEFINE([BUILD_ENABLE_DEBUG], [], [Enable debug log level]))
+AC_ARG_VAR(IP_BINARY, [Path for ip binary])
+if test -z "$IP_BINARY"; then
+	IP_BINARY=/bin/ip
+fi
+AC_ARG_ENABLE([systemd],
+              AS_HELP_STRING([--disable-systemd], [Disable systemd]),
+              [case "${enableval}" in
+                yes) use_libsystemd=yes ;;
+                no)  use_libsystemd=no ;;
+                *) AC_MSG_ERROR([bad value ${enableval} for --enable-systemd]) ;;
+              esac],
+              [use_libsystemd=yes])
+
+AC_DEFINE_UNQUOTED([IP_BINARY], [$IP_BINARY], [Path for ip binary])
+
 #
 # Mandatory dependencies
 #
 
-PKG_CHECK_MODULES([DEPS], [libudev libsystemd > 219])
-PKG_CHECK_MODULES([GLIB], [glib-2.0])
+AS_IF([test "$use_libsystemd" = "yes"],
+  [
+     AC_DEFINE([ENABLE_SYSTEMD], [], [Use systemd])
+     m4_ifdef([PKG_CHECK_MODULES], [
+       PKG_CHECK_MODULES([DEPS], [libudev libsystemd > 219])
+       PKG_CHECK_MODULES([GLIB], [glib-2.0])
+     ])
+  ],
+  [
+     m4_ifdef([PKG_CHECK_MODULES], [
+       PKG_CHECK_MODULES([DEPS], [libudev libelogind])
+       PKG_CHECK_MODULES([GLIB], [glib-2.0])
+     ])
+  ])
 
 AC_CHECK_HEADERS(readline/readline.h,, AC_MSG_ERROR(GNU readline not found))
 
@@ -55,8 +82,10 @@ AC_CHECK_HEADERS(readline/readline.h,, AC_MSG_ERROR(GNU readline not found))
 # all tests.
 #
 
-PKG_CHECK_MODULES([CHECK], [check],
-                  [have_check=yes], [have_check=no])
+m4_ifdef([PKG_CHECK_MODULES], [
+	PKG_CHECK_MODULES([CHECK], [check],
+        	          [have_check=yes], [have_check=no])
+])
 AM_CONDITIONAL([BUILD_HAVE_CHECK], [test "x$have_check" = "xyes"])
 
 if test "x$have_check" = "xyes"
@@ -161,13 +190,15 @@ AC_MSG_NOTICE([Build configuration:
        bindir: $bindir
        libdir: $libdir
        includedir: $includedir
+       sysconfdir: $sysconfdir
+       ip-binary: $IP_BINARY
 
 Miscellaneous Options:
        building tests: $have_check
        code coverage: $use_gcov
+       rely udev: ${enable_rely_udev:-no}
 
 Compilation
-       mkdir build && cd build
        "${MAKE-make}" to start compilation process
        "${MAKE-make}" check to pass test])
 else
@@ -177,11 +208,13 @@ AC_MSG_NOTICE([Build configuration:
        bindir: $bindir
        libdir: $libdir
        includedir: $includedir
+       sysconfdir: $sysconfdir
+       ip-binary: $IP_BINARY
 
 Miscellaneous Options:
        building tests: $have_check
+       rely udev: ${enable_rely_udev:-no}
 
 Compilation
-       mkdir build && cd build
        "${MAKE-make}" to start compilation process])
 fi
