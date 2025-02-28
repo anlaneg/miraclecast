@@ -91,7 +91,7 @@ struct rtsp {
 	} parser;
 
 	bool is_dead : 1;
-	bool is_calling : 1;
+	bool is_calling : 1;/*标明回调是否正在调用*/
 };
 
 struct rtsp_match {
@@ -99,7 +99,7 @@ struct rtsp_match {
 	rtsp_callback_fn cb_fn;
 	void *data;
 
-	bool is_removed : 1;
+	bool is_removed : 1;/*指明是否需要移除*/
 };
 
 struct rtsp_header {
@@ -355,7 +355,7 @@ static int rtsp_message_new(struct rtsp *bus,
 	if (!bus || !out)
 		return -EINVAL;
 
-	m = calloc(1, sizeof(*m));
+	m = calloc(1, sizeof(*m));/*申请一个空的message*/
 	if (!m)
 		return -ENOMEM;
 
@@ -527,7 +527,7 @@ int rtsp_message_new_data(struct rtsp *bus,
 			  struct rtsp_message **out,
 			  unsigned int channel,
 			  const void *payload,
-			  size_t size)
+			  size_t size/*payload长度*/)
 {
 	_rtsp_message_unref_ struct rtsp_message *m = NULL;
 	int r;
@@ -552,7 +552,7 @@ int rtsp_message_new_data(struct rtsp *bus,
 		if (!m->data_payload)
 			return -ENOMEM;
 
-		memcpy(m->data_payload, payload, size);
+		memcpy(m->data_payload, payload, size);/*复制内容*/
 	}
 
 	*out = m;
@@ -2145,7 +2145,7 @@ static int parser_submit(struct rtsp *bus)
 	if (!dec->m)
 		return 0;
 
-	m = dec->m;
+	m = dec->m;/*获得待处理消息*/
 	dec->m = NULL;
 
 	r = rtsp_message_seal(m);
@@ -2157,7 +2157,7 @@ static int parser_submit(struct rtsp *bus)
 	return rtsp_incoming_message(m);
 }
 
-static int parser_submit_data(struct rtsp *bus, uint8_t *p)
+static int parser_submit_data(struct rtsp *bus, uint8_t *p/*负载内容*/)
 {
 	_rtsp_message_unref_ struct rtsp_message *m = NULL;
 	struct rtsp_parser *dec = &bus->parser;
@@ -2167,7 +2167,7 @@ static int parser_submit_data(struct rtsp *bus, uint8_t *p)
 				  &m,
 				  dec->data_channel,
 				  p,
-				  dec->data_size);
+				  dec->data_size/*负责长度*/);
 	if (r < 0) {
 		return r;
 	}
@@ -2475,7 +2475,7 @@ static int parser_feed_char_data_body(struct rtsp *bus, char ch)
 		 * make sure it's 0-terminated to work around client bugs. */
 		buf[dec->data_size] = 0;
 
-		shl_ring_copy(&dec->buf, buf, dec->data_size);
+		shl_ring_copy(&dec->buf, buf, dec->data_size);/*将dec->buf填充到buf中*/
 
 		r = parser_submit_data(bus, buf);
 		free(buf);
@@ -2629,18 +2629,21 @@ static int rtsp_call(struct rtsp *bus, struct rtsp_message *m)
 
 	r = 0;
 
-	bus->is_calling = true;
+	bus->is_calling = true;/*标明回调正在调用*/
+	/*遍历bus上所有match,并逐个触发回调*/
 	shl_dlist_for_each(i, &bus->matches) {
 		match = shl_dlist_entry(i, struct rtsp_match, list);
-		r = match->cb_fn(bus, m, match->data);
+		r = match->cb_fn(bus, m, match->data);/*触发回调*/
 		if (r != 0)
 			break;
 	}
-	bus->is_calling = false;
+	bus->is_calling = false;/*标明回调调用完成*/
 
+	/*遍历bus上所有match,并逐个检查，是否需要移除*/
 	shl_dlist_for_each_safe(i, t, &bus->matches) {
 		match = shl_dlist_entry(i, struct rtsp_match, list);
 		if (match->is_removed)
+			/*按需移除*/
 			rtsp_free_match(match);
 	}
 
@@ -2760,7 +2763,7 @@ static int rtsp_incoming_message(struct rtsp_message *m)
 	case RTSP_MESSAGE_REQUEST:
 	case RTSP_MESSAGE_DATA:
 		/* simply forward all these to the match-handlers */
-		r = rtsp_call(m->bus, m);
+		r = rtsp_call(m->bus, m);/*触发bus上所有match回调*/
 		if (r < 0)
 			return r;
 
@@ -2779,27 +2782,28 @@ static int rtsp_incoming_message(struct rtsp_message *m)
 
 static int rtsp_read(struct rtsp *bus)
 {
-	char buf[4096];
+	char buf[4096];/*用于缓存收取到的内容*/
 	ssize_t res;
 
+	/*自fd上收取数据*/
 	res = recv(bus->fd,
 		   buf,
 		   sizeof(buf),
 		   MSG_DONTWAIT);
 	if (res < 0) {
 		if (errno == EAGAIN || errno == EINTR)
-			return -EAGAIN;
+			return -EAGAIN;/*稍后重试*/
 
 		return -errno;
 	} else if (!res) {
 		/* there're no 0-length packets on streams; this is EOF */
-		return -EPIPE;
+		return -EPIPE;/*达到文件结尾*/
 	} else if (res > sizeof(buf)) {
-		res = sizeof(buf);
+		res = sizeof(buf);/*收取内容过长*/
 	}
 
 	/* parses all messages and calls rtsp_incoming_message() for each */
-	return rtsp_parse_data(bus, buf, res);
+	return rtsp_parse_data(bus, buf, res/*收取的数据长度*/);
 }
 
 static int rtsp_write_message(struct rtsp_message *m)
@@ -2928,7 +2932,7 @@ int rtsp_open(struct rtsp **out, int fd)
 		return -ENOMEM;
 
 	bus->ref = 1;
-	bus->fd = fd;
+	bus->fd = fd;/*rtsp对应的fd*/
 	shl_dlist_init(&bus->matches);
 	shl_dlist_init(&bus->outgoing);
 	shl_htable_init_u64(&bus->waiting);
@@ -3139,8 +3143,8 @@ int rtsp_add_match(struct rtsp *bus, rtsp_callback_fn cb_fn, void *data)
 	if (!match)
 		return -ENOMEM;
 
-	match->cb_fn = cb_fn;
-	match->data = data;
+	match->cb_fn = cb_fn;/*指明回调函数*/
+	match->data = data;/*指明回调函数参数*/
 
 	shl_dlist_link_tail(&bus->matches, &match->list);
 

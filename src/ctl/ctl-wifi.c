@@ -120,10 +120,11 @@ static int ctl_peer_parse_properties(struct ctl_peer *p,
 	while ((r = sd_bus_message_enter_container(m,
 						   'e',
 						   "sv")) > 0) {
-		r = sd_bus_message_read(m, "s", &t);
+		r = sd_bus_message_read(m, "s", &t);/*取字符串*/
 		if (r < 0)
 			return cli_log_parser(r);
 
+		/*依据字符串给定的变量名称，取其对应的VARIANT*/
 		if (!strcmp(t, "P2PMac")) {
 			r = bus_message_read_basic_variant(m, "s", &p2p_mac);
 			if (r < 0)
@@ -146,6 +147,7 @@ static int ctl_peer_parse_properties(struct ctl_peer *p,
 			if (r < 0)
 				return cli_log_parser(r);
 		} else if (!strcmp(t, "LocalAddress")) {
+			/*自消息中取得字符串类型的local_address*/
 			r = bus_message_read_basic_variant(m, "s",
 							   &local_address);
 			if (r < 0)
@@ -209,7 +211,7 @@ static int ctl_peer_parse_properties(struct ctl_peer *p,
 		tmp = strdup(local_address);
 		if (tmp) {
 			free(p->local_address);
-			p->local_address = tmp;
+			p->local_address = tmp;/*本端地址*/
 		} else {
 			cli_vENOMEM();
 		}
@@ -219,7 +221,7 @@ static int ctl_peer_parse_properties(struct ctl_peer *p,
 		tmp = strdup(remote_address);
 		if (tmp) {
 			free(p->remote_address);
-			p->remote_address = tmp;
+			p->remote_address = tmp;/*要连接的对端地址*/
 		} else {
 			cli_vENOMEM();
 		}
@@ -239,6 +241,7 @@ static int ctl_peer_parse_properties(struct ctl_peer *p,
 	if (connected_set && p->connected != connected) {
 		p->connected = connected;
 		if (p->connected)
+			/*与对端连接*/
 			ctl_fn_peer_connected(p);
 		else
 			ctl_fn_peer_disconnected(p);
@@ -850,7 +853,7 @@ static int ctl_wifi_parse_peer(struct ctl_wifi *w,
 			continue;
 		}
 
-		r = ctl_peer_parse_properties(p, m);
+		r = ctl_peer_parse_properties(p, m);/*解析消息提供的内容*/
 		if (r < 0)
 			return r;
 
@@ -881,7 +884,7 @@ static int ctl_wifi_parse_object(struct ctl_wifi *w,
 	const char *t;
 	int r;
 
-	r = sd_bus_message_read(m, "o", &t);
+	r = sd_bus_message_read(m, "o", &t);/*取object路径*/
 	if (r < 0)
 		return cli_log_parser(r);
 
@@ -907,9 +910,9 @@ static int ctl_wifi_parse_object(struct ctl_wifi *w,
 	if (r < 0) {
 		return cli_ENOMEM();
 	} else if (r > 0) {
-		p = ctl_wifi_find_peer(w, label);
+		p = ctl_wifi_find_peer(w, label);/*通过label查找peer*/
 		if (!p && added) {
-			return ctl_wifi_parse_peer(w, label, m);
+			return ctl_wifi_parse_peer(w, label, m);/*解析消息*/
 		} else if (p && !added) {
 			/* We don't do any dynamic interfaces, so if any of
 			 * them is removed, all of them are removed. */
@@ -1159,13 +1162,15 @@ int ctl_wifi_fetch(struct ctl_wifi *w)
 	if (!w)
 		return cli_EINVAL();
 
+	/*发送消息*/
 	r = sd_bus_call_method(w->bus,
-			       "org.freedesktop.miracle.wifi",
-			       "/org/freedesktop/miracle/wifi",
-			       "org.freedesktop.DBus.ObjectManager",
-			       "GetManagedObjects",
-			       &err,
-			       &m,
+			       "org.freedesktop.miracle.wifi"/*指定方法调用的目标服务的名称*/,
+			       "/org/freedesktop/miracle/wifi",/*指定目标对象的路径。*/
+			       "org.freedesktop.DBus.ObjectManager",/*指定要调用的方法所在的接口名称。*/
+			       "GetManagedObjects",/*指定要调用的方法的名称。org.freedesktop.DBus.ObjectManager
+			       确实是 D-Bus 的内置接口，用于管理和枚举对象及其接口*/
+			       &err,/*用于存储调用过程中可能出现的错误信息。*/
+			       &m,/*用于存储方法调用的响应消息。*/
 			       NULL);
 	if (r < 0) {
 		cli_error("cannot retrieve objects: %s",
@@ -1173,14 +1178,15 @@ int ctl_wifi_fetch(struct ctl_wifi *w)
 		return r;
 	}
 
-	r = sd_bus_message_enter_container(m, 'a', "{oa{sa{sv}}}");
+	r = sd_bus_message_enter_container(m, 'a'/*数组类型*/, "{oa{sa{sv}}}");
 	if (r < 0)
+		/*响应格式有误*/
 		return cli_log_parser(r);
 
 	while ((r = sd_bus_message_enter_container(m,
-						   'e',
+						   'e',/*元素*/
 						   "oa{sa{sv}}")) > 0) {
-		r = ctl_wifi_parse_object(w, m, true);
+		r = ctl_wifi_parse_object(w, m, true);/*解析此消息*/
 		if (r < 0)
 			return r;
 

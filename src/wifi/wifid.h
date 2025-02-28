@@ -67,8 +67,8 @@ void supplicant_peer_disconnect(struct supplicant_peer *sp);
 /* peer */
 
 struct peer {
-	struct link *l;
-	char *p2p_mac;
+	struct link *l;/*所属link*/
+	char *p2p_mac;/*peer的mac地址*/
 	struct supplicant_peer *sp;
 
 	bool public : 1;
@@ -132,8 +132,8 @@ struct link {
 	char *config_methods;
 	char *ip_binary;
 
-	size_t peer_cnt;
-	struct shl_htable peers;
+	size_t peer_cnt;/*peers表中元素数*/
+	struct shl_htable peers;/*记录peer信息*/
 
 	bool managed : 1;
 	bool public : 1;

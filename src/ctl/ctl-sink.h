@@ -52,19 +52,19 @@ extern int uibc_port;
 struct ctl_sink {
     sd_event *event;
 
-    char *target;
+    char *target;/*目标地址（字符串形式）*/
     char *session;
     char *url;
     char *uibc_config;
     char *uibc_setting;
-    struct sockaddr_storage addr;
+    struct sockaddr_storage addr;/*目标地址（ipv4格式）*/
     size_t addr_size;
     int fd;
     sd_event_source *fd_source;
 
     struct rtsp *rtsp;
 
-    bool connected : 1;
+    bool connected : 1;/*是否连接成功*/
     bool hup : 1;
 
     uint32_t resolutions_cea;

@@ -914,9 +914,9 @@ int manager_dbus_connect(struct manager *m)
 		goto error;
 
 	r = sd_bus_add_fallback_vtable(m->bus, NULL,
-				       "/org/freedesktop/miracle/wifi/link",
-				       "org.freedesktop.miracle.wifi.Link",
-				       link_dbus_vtable,
+				       "/org/freedesktop/miracle/wifi/link",/*指定要注册的对象的路径。*/
+				       "org.freedesktop.miracle.wifi.Link",/*指定对象所实现的接口名称。*/
+				       link_dbus_vtable,/*该结构体定义了对象的方法、信号和属性的处理函数。*/
 				       link_dbus_find,
 				       m);
 	if (r < 0)
@@ -931,10 +931,12 @@ int manager_dbus_connect(struct manager *m)
 	if (r < 0)
 		goto error;
 
+	/*注册对象管理器*/
 	r = sd_bus_add_object_manager(m->bus, NULL, "/org/freedesktop/miracle/wifi");
 	if (r < 0)
 		goto error;
 
+	/*占有‘org.freedesktop.miracle.wifi’服务名称*/
 	r = sd_bus_request_name(m->bus, "org.freedesktop.miracle.wifi", 0);
 	if (r < 0) {
 		if (r == -EEXIST) {

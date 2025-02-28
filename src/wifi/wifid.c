@@ -628,7 +628,7 @@ int main(int argc, char **argv)
 		goto finish;
 
 	r = sd_notify(false, "READY=1\n"
-			     "STATUS=Running..");
+			     "STATUS=Running..");/*知会systemd,启动完成*/
 	if (r < 0) {
 		log_vERR(r);
 		goto finish;

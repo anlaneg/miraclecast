@@ -60,7 +60,7 @@ static sd_event_source *scan_timeout;
 static sd_event_source *sink_timeout;
 static unsigned int sink_timeout_time;
 static bool sink_connected;
-static pid_t sink_pid;
+static pid_t sink_pid;/*player进程名称*/
 
 static char *bound_link;
 static struct ctl_link *running_link;
@@ -378,7 +378,7 @@ static void schedule_timeout(sd_event_source **out,
 				      CLOCK_MONOTONIC,
 				      rel_usec,
 				      0,
-				      timeout_fn,
+				      timeout_fn,/*超时回调函数*/
 				      data);
 		if (r < 0)
 			cli_vERR(r);
@@ -421,7 +421,7 @@ static int sink_timeout_fn(sd_event_source *s, uint64_t usec, void *data)
 	if (running_peer &&
 	    running_peer->connected &&
 	    ctl_sink_is_closed(sink)) {
-		r = ctl_sink_connect(sink, running_peer->remote_address);
+		r = ctl_sink_connect(sink, running_peer->remote_address/*要连接的远端地址（字符串形式）*/);
 		if (r < 0) {
 			if (sink_timeout_time++ >= 3)
 				cli_vERR(r);
@@ -449,6 +449,7 @@ static const struct cli_cmd cli_cmds[] = {
 	{ },
 };
 
+/*创建进程并执行player*/
 static void spawn_gst(struct ctl_sink *s)
 {
 	pid_t pid;
@@ -460,6 +461,7 @@ static void spawn_gst(struct ctl_sink *s)
 
 	pid = fork();
 	if (pid < 0) {
+		/*fork失败*/
 		return cli_vERRNO();
 	} else if (!pid) {
 		/* child */
@@ -484,10 +486,10 @@ static void spawn_gst(struct ctl_sink *s)
 		}
 #endif
 
-		launch_player(s);
+		launch_player(s);/*子进程加载player*/
 		_exit(1);
 	} else {
-		sink_pid = pid;
+		sink_pid = pid;/*记录子进程名称*/
 	}
 }
 
@@ -586,7 +588,7 @@ static void kill_gst(void)
 void ctl_fn_sink_connected(struct ctl_sink *s)
 {
 	cli_notice("SINK connected");
-	sink_connected = true;
+	sink_connected = true;/*连接成功*/
 }
 
 void ctl_fn_sink_disconnected(struct ctl_sink *s)
@@ -604,7 +606,7 @@ void ctl_fn_sink_resolution_set(struct ctl_sink *s)
 {
 	cli_printf("SINK set resolution %dx%d\n", s->hres, s->vres);
 	if (sink_connected)
-		spawn_gst(s);
+		spawn_gst(s);/*创建显示进程*/
 }
 
 void ctl_fn_peer_new(struct ctl_peer *p)
@@ -707,7 +709,7 @@ void ctl_fn_peer_connected(struct ctl_peer *p)
 
 	if (cli_running())
 		cli_printf("[" CLI_GREEN "CONNECT" CLI_DEFAULT "] Peer: %s\n",
-			   p->label);
+			   p->label);/*显示和对端连接*/
 
 	pending_peer = NULL;
 

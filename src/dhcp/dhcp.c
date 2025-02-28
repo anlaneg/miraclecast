@@ -115,6 +115,7 @@ static void write_comm(const void *msg, size_t size)
 	if (arg_comm < 0)
 		return;
 
+	/*向fd写入msg*/
 	r = send(arg_comm, msg, size, MSG_NOSIGNAL);
 	if (r < 0 && !warned) {
 		warned = true;
@@ -123,6 +124,7 @@ static void write_comm(const void *msg, size_t size)
 	}
 }
 
+/*格式化字符串产生msg,并通过arg_comm向外写msg*/
 static void writef_comm(const void *format, ...)
 {
 	va_list args;
@@ -341,12 +343,12 @@ static void client_lease_fn(GDHCPClient *client, gpointer data)
 			goto error;
 		}
 
-		writef_comm("L:%s", addr);
+		writef_comm("L:%s", addr);/*写本端地址*/
 		writef_comm("S:%s", subnet);
 		if (dns)
 			writef_comm("D:%s", dns);
 		if (gateway)
-			writef_comm("G:%s", gateway);
+			writef_comm("G:%s", gateway);/*写gateway地址*/
 	}
 
 	g_free(addr);
@@ -689,7 +691,7 @@ static int manager_run(struct manager *m)
 			return -EFAULT;
 		}
 
-		writef_comm("L:%s", arg_local);
+		writef_comm("L:%s", arg_local);/*写本端地址*/
 	}
 
 	g_main_loop_run(m->loop);
@@ -839,7 +841,7 @@ static int parse_argv(int argc, char *argv[])
 			arg_ip_binary = optarg;
 			break;
 		case ARG_COMM_FD:
-			arg_comm = atoi(optarg);
+			arg_comm = atoi(optarg);/*按参数填写comm fd*/
 			break;
 
 		case ARG_SERVER:

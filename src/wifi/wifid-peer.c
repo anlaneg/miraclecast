@@ -46,8 +46,9 @@ int peer_new(struct link *l,
 
 	reformat_mac(mac, p2p_mac);
 
+	/*通过mac地址查询*/
 	if (shl_htable_lookup_str(&l->peers, mac, NULL, NULL))
-		return -EALREADY;
+		return -EALREADY;/*已存在，报错*/
 
 	log_debug("new peer: %s @ %s", mac, l->ifname);
 
@@ -62,7 +63,7 @@ int peer_new(struct link *l,
 		goto error;
 	}
 	strncpy(p->p2p_mac, mac, MAC_STRLEN);
-	p->p2p_mac[MAC_STRLEN - 1] = 0;
+	p->p2p_mac[MAC_STRLEN - 1] = 0;/*设置p2p mac地址*/
 
 	r = shl_htable_insert_str(&l->peers, &p->p2p_mac, NULL);
 	if (r < 0) {
@@ -74,7 +75,7 @@ int peer_new(struct link *l,
 	log_info("add peer: %s", p->p2p_mac);
 
 	if (out)
-		*out = p;
+		*out = p;/*返回创建的peer*/
 
 	return 0;
 
@@ -126,7 +127,7 @@ const char *peer_get_local_address(struct peer *p)
 const char *peer_get_remote_address(struct peer *p)
 {
 	if (!p || !p->connected)
-		return NULL;
+		return NULL;/*未连接，无法提供remote address*/
 
 	return supplicant_peer_get_remote_address(p->sp);
 }

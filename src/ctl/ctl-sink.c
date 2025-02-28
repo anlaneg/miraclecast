@@ -364,7 +364,7 @@ static void sink_handle(struct ctl_sink *s,
 
 	cli_debug("INCOMING: %s\n", rtsp_message_get_raw(m));
 
-	method = rtsp_message_get_method(m);
+	method = rtsp_message_get_method(m);/*取得method*/
 	if (!method)
 		return;
 
@@ -406,14 +406,14 @@ static void sink_connected(struct ctl_sink *s)
 	socklen_t len;
 
 	if (s->connected || s->hup)
-		return;
+		return;/*连接成功/出错，在此处返回*/
 
 	sd_event_source_set_enabled(s->fd_source, SD_EVENT_OFF);
 
 	len = sizeof(val);
 	r = getsockopt(s->fd, SOL_SOCKET, SO_ERROR, &val, &len);
 	if (r < 0) {
-		s->hup = true;
+		s->hup = true;/*指明出错*/
 		cli_vERRNO();
 		return;
 	} else if (val) {
@@ -426,20 +426,20 @@ static void sink_connected(struct ctl_sink *s)
 
 	cli_debug("connection established");
 
-	r = rtsp_open(&s->rtsp, s->fd);
+	r = rtsp_open(&s->rtsp, s->fd);/*注入rtsp对应的fd*/
 	if (r < 0)
 		goto error;
 
-	r = rtsp_attach_event(s->rtsp, s->event, 0);
+	r = rtsp_attach_event(s->rtsp, s->event, 0);/*监听此fd，以便解析rtsp内容*/
 	if (r < 0)
 		goto error;
 
-	r = rtsp_add_match(s->rtsp, sink_rtsp_fn, s);
+	r = rtsp_add_match(s->rtsp, sink_rtsp_fn, s);/*为rtsp指明回调，实现解析rtsp内容*/
 	if (r < 0)
 		goto error;
 
 	s->connected = true;
-	ctl_fn_sink_connected(s);
+	ctl_fn_sink_connected(s);/*指明连接成功*/
 	return;
 
 error:
@@ -450,6 +450,7 @@ error:
 static void sink_io(struct ctl_sink *s, uint32_t mask)
 {
 	if (mask & EPOLLOUT)
+		/*可读，则连接建立*/
 		sink_connected(s);
 
 	if (mask & (EPOLLHUP | EPOLLERR)) {
@@ -483,12 +484,14 @@ static int sink_connect(struct ctl_sink *s)
 	if (!s->addr.ss_family || !s->addr_size)
 		return cli_EINVAL();
 
+	/*创建fd*/
 	fd = socket(s->addr.ss_family,
 		    SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK,
 		    0);
 	if (fd < 0)
 		return cli_ERRNO();
 
+	/*与s指明的地址建立连接*/
 	r = connect(fd, (struct sockaddr*)&s->addr, s->addr_size);
 	if (r < 0) {
 		r = -errno;
@@ -500,7 +503,7 @@ static int sink_connect(struct ctl_sink *s)
 
 	r = sd_event_add_io(s->event,
 			    &s->fd_source,
-			    fd,
+			    fd,/*监听此连接*/
 			    EPOLLHUP | EPOLLERR | EPOLLIN | EPOLLOUT | EPOLLET,
 			    sink_io_fn,
 			    s);
@@ -509,7 +512,7 @@ static int sink_connect(struct ctl_sink *s)
 		goto err_close;
 	}
 
-	s->fd = fd;
+	s->fd = fd;/*记录此fd(s已做为参数传入，故sink_io_fn函数实现时取s->fd即可）*/
 	return 0;
 
 err_close:
@@ -585,8 +588,8 @@ int ctl_sink_connect(struct ctl_sink *s, const char *target)
 		return cli_EINVAL();
 
 	addr.sin_family = AF_INET;
-	addr.sin_port = htons(7236);
-	r = inet_pton(AF_INET, target, &addr.sin_addr);
+	addr.sin_port = htons(7236);/*指明要连接的端口*/
+	r = inet_pton(AF_INET, target, &addr.sin_addr);/*target地址转换为目标ipv4地址*/
 	if (r != 1)
 		return cli_EINVAL();
 
@@ -597,8 +600,8 @@ int ctl_sink_connect(struct ctl_sink *s, const char *target)
 	free(s->target);
 	s->target = t;
 
-	memcpy(&s->addr, &addr, sizeof(addr));
-	s->addr_size = sizeof(addr);
+	memcpy(&s->addr, &addr, sizeof(addr));/*设置目标地址*/
+	s->addr_size = sizeof(addr);/*设置目标地址长度*/
 
 	return sink_connect(s);
 }

@@ -120,6 +120,7 @@ static struct supplicant_peer *find_peer_by_p2p_mac(struct supplicant *s,
 {
 	struct peer *p;
 
+	/*通过p2p mac查找peer*/
 	p = link_find_peer(s->l, p2p_mac);
 	if (p)
 		return p->sp;
@@ -134,7 +135,7 @@ static struct supplicant_peer *find_peer_by_any_mac(struct supplicant *s,
 
 	LINK_FOREACH_PEER(p, s->l) {
 		if (!strcmp(p->p2p_mac, mac) || (p->sp->sta_mac && !strcmp(p->sp->sta_mac, mac)))
-			return p->sp;
+			return p->sp;/*通过mac查找peer*/
 	}
 
 	return NULL;
@@ -240,6 +241,7 @@ static int supplicant_group_comm_fn(sd_event_source *source,
 	ssize_t l;
 	char mac[MAC_STRLEN];
 
+	/*自fd收取（dhcp响应）内容*/
 	l = recv(fd, buf, sizeof(buf) - 1, MSG_DONTWAIT);
 	if (l < 0) {
 		l = -errno;
@@ -256,7 +258,7 @@ static int supplicant_group_comm_fn(sd_event_source *source,
 	}
 
 	buf[l] = 0;
-	log_debug("dhcp-comm-%s: %s", g->ifname, buf);
+	log_debug("dhcp-comm-%s: %s", g->ifname, buf);/*显示收到的内容*/
 
 	/* we only parse "X:<addr>" right now */
 	if (l < 3 || buf[1] != ':' || !buf[2])
@@ -270,18 +272,20 @@ static int supplicant_group_comm_fn(sd_event_source *source,
 
 	switch (buf[0]) {
 	case 'L':
+		/*设置本端地址*/
 		free(g->local_addr);
 		g->local_addr = t;
 		break;
 	case 'G':
 		if (g->sp) {
 			free(g->sp->remote_addr);
-			g->sp->remote_addr = t;
+			g->sp->remote_addr = t;/*设置远端地址*/
 		} else {
 			free(t);
 		}
 		break;
 	case 'R':
+		/*设置mac地址及远端地址*/
 		ip = strchr(t, ' ');
 		if (!ip || ip == t || !ip[1]) {
 			log_warning("invalid dhcp 'R' line: %s", t);
@@ -290,7 +294,7 @@ static int supplicant_group_comm_fn(sd_event_source *source,
 		}
 
 		*ip++ = 0;
-		reformat_mac(mac, t);
+		reformat_mac(mac, t);/*解析mac地址*/
 		sp = find_peer_by_any_mac(g->s, mac);
 		if (sp) {
 			ip = strdup(ip);
@@ -303,7 +307,7 @@ static int supplicant_group_comm_fn(sd_event_source *source,
 			free(t);
 
 			free(sp->remote_addr);
-			sp->remote_addr = ip;
+			sp->remote_addr = ip;/*设置远端地址*/
 		} else {
 			log_debug("ignore 'R' line for unknown mac");
 			free(t);
@@ -412,6 +416,7 @@ static int supplicant_group_spawn_dhcp_server(struct supplicant_group *g,
 		}
 		argv[i] = NULL;
 
+		/*在接口g->ifname上执行miracle-dhcp server程序*/
 		if (execvpe(argv[0], argv, environ)< 0) {
 			log_error("dhcp failed (%d): %m", errno);
 		}
@@ -433,12 +438,13 @@ static int supplicant_group_spawn_dhcp_client(struct supplicant_group *g)
 	pid_t pid;
 	sigset_t mask;
 
-	r = socketpair(AF_UNIX, SOCK_SEQPACKET, 0, fds);
+	r = socketpair(AF_UNIX, SOCK_SEQPACKET, 0, fds);/*创建pair*/
 	if (r < 0)
 		return log_ERRNO();
 
 	pid = fork();
 	if (pid < 0) {
+		/*创建子进程失败*/
 		close(fds[0]);
 		close(fds[1]);
 		return log_ERRNO();
@@ -477,10 +483,11 @@ static int supplicant_group_spawn_dhcp_client(struct supplicant_group *g)
 		argv[i++] = commfd;
 		if (g->s->l->ip_binary) {
 			argv[i++] = "--ip-binary";
-			argv[i++] = g->s->l->ip_binary;
+			argv[i++] = g->s->l->ip_binary;/*指明ip命令路径*/
 		}
 		argv[i] = NULL;
 
+		/*在接口g->ifname上执行miracle-dhcp client程序*/
 		if (execvpe(argv[0], argv, environ) < 0) {
 			log_error("dhcp failed (%d): %m", errno);
 		}
@@ -541,13 +548,13 @@ static int supplicant_group_new(struct supplicant *s,
 		}
 
 		if (g->subnet) {
-			r = supplicant_group_spawn_dhcp_server(g, g->subnet);
+			r = supplicant_group_spawn_dhcp_server(g, g->subnet);/*创建dhcp server*/
 		} else {
 			log_warning("out of free subnets for local groups");
 			r = -EINVAL;
 		}
 	} else {
-		r = supplicant_group_spawn_dhcp_client(g);
+		r = supplicant_group_spawn_dhcp_client(g);/*创建dhcp client*/
 	}
 	if (r < 0)
 		goto error;
@@ -726,7 +733,7 @@ const char *supplicant_peer_get_remote_address(struct supplicant_peer *sp)
 	if (!sp || !sp->g)
 		return NULL;
 
-	return sp->remote_addr;
+	return sp->remote_addr;/*返回远端地址*/
 }
 
 const char *supplicant_peer_get_wfd_subelements(struct supplicant_peer *sp)
@@ -812,7 +819,7 @@ void supplicant_peer_disconnect(struct supplicant_peer *sp)
 	if (!sp)
 		return;
 
-	log_debug("disconnect from %s", sp->p->p2p_mac);
+	log_debug("disconnect from %s", sp->p->p2p_mac);/*断开连接*/
 
 	/* clear cache even if not connected; can be used as custom reset */
 	free(sp->pin);
@@ -850,7 +857,7 @@ static void supplicant_parse_peer(struct supplicant *s,
 	char *t;
 	int r;
 
-	r = wpas_message_read(m, "s", &mac);
+	r = wpas_message_read(m, "s", &mac);/*读取mac地址*/
 	if (r < 0) {
 		log_debug("no p2p-mac in P2P_PEER information: %s",
 			  wpas_message_get_raw(m));
@@ -859,6 +866,7 @@ static void supplicant_parse_peer(struct supplicant *s,
 
 	sp = find_peer_by_p2p_mac(s, mac);
 	if (!sp) {
+		/*不存在，创建*/
 		r = supplicant_peer_new(s, mac, &sp);
 		if (r < 0)
 			return;
@@ -866,7 +874,7 @@ static void supplicant_parse_peer(struct supplicant *s,
 
 	/* P2P-PEER reports the device name as 'device_name', P2P-DEVICE-FOUND
 	 * uses 'name. Allow either here.. */
-	r = wpas_message_dict_read(m, "device_name", 's', &name);
+	r = wpas_message_dict_read(m, "device_name", 's', &name);/*读设备名称*/
 	if (r < 0)
 		r = wpas_message_dict_read(m, "name", 's', &name);
 	if (r >= 0) {
@@ -940,6 +948,11 @@ static int supplicant_p2p_peer_fn(struct wpas *w,
 	return 0;
 }
 
+/*例如收到以下事件内容
+ * P2P-DEVICE-FOUND 00:11:22:33:44:55 p2p_dev_addr=00:11:22:33:44:55 \
+ * pri_dev_type=0-00000000-0 name='' config_methods=0x108 dev_capab=0x21 \
+ * group_capab=0x0 adv_id=111 asp_svc=alt.example.chat
+ * */
 static void supplicant_event_p2p_device_found(struct supplicant *s,
 					      struct wpas_message *ev)
 {
@@ -1489,7 +1502,7 @@ static void supplicant_event(struct supplicant *s, struct wpas_message *m)
 		if (!strcmp(name, "P2P-FIND-STOPPED"))
 			supplicant_event_p2p_find_stopped(s, m);
 		else if (!strcmp(name, "P2P-DEVICE-FOUND"))
-			supplicant_event_p2p_device_found(s, m);
+			supplicant_event_p2p_device_found(s, m);/*发现p2p设备*/
 		else if (!strcmp(name, "P2P-DEVICE-LOST"))
 			supplicant_event_p2p_device_lost(s, m);
 		else if (!strcmp(name, "P2P-PROV-DISC-PBC-REQ"))
@@ -2419,7 +2432,7 @@ static void supplicant_run(struct supplicant *s, const char *binary)
 
 	/* initialize wpa_supplicant args */
 	i = 0;
-	argv[i++] = (char*)binary;
+	argv[i++] = (char*)binary;/*指明wpa_supplicant程序路径*/
 
 	/* debugging? */
 	if (arg_wpa_loglevel >= LOG_DEBUG)
@@ -2470,6 +2483,7 @@ static int supplicant_find(char **binary)
             break;
         }
 
+        /*查找wpa_supplicant程序*/
         _shl_free_ char *bin = shl_strcat(curr, "/wpa_supplicant");
         if (!bin)
             return log_ENOMEM();
@@ -2482,7 +2496,7 @@ static int supplicant_find(char **binary)
         }
 
         if (!access(bin, X_OK)) {
-            *binary = strdup(bin);
+            *binary = strdup(bin);/*返回wpa_supplicant程序路径*/
             return 0;
         }
 
@@ -2506,6 +2520,7 @@ static int supplicant_spawn(struct supplicant *s)
 
 	log_debug("spawn supplicant of %s", s->l->ifname);
 
+	/*取supplicant程序路径*/
     if (supplicant_find(&binary) < 0) {
         if (binary != NULL) {
             log_error("execution of wpas (%s) not possible: %m", binary);
@@ -2521,6 +2536,7 @@ static int supplicant_spawn(struct supplicant *s)
 	if (pid < 0) {
 		return log_ERRNO();
 	} else if (!pid) {
+		/*子进程，启动supplicant程序*/
 		supplicant_run(s, binary);
 		exit(1);
 	}
